@@ -1,9 +1,15 @@
+import logging
 import os
 import time
 from collections import defaultdict
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("agent-backend")
+
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from groq import Groq
 from pydantic import BaseModel, Field
 
@@ -22,6 +28,12 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def log_validation_error(request: Request, exc: RequestValidationError):
+    logger.error("422 on %s: %s", request.url.path, exc.errors())
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 # ── rate limiting ────────────────────────────────────────────────────────
 # ponytail: in-memory dict, resets on restart, not shared across workers.
@@ -100,7 +112,8 @@ def chat(req: ChatRequest, request: Request):
             max_completion_tokens=700,
             reasoning_effort="low",
         )
-    except Exception:
+    except Exception as e:
+        logger.error("chat: Groq call failed: %s: %s", type(e).__name__, e)
         raise HTTPException(status_code=502, detail="Upstream model error")
 
     return ChatResponse(reply=resp.choices[0].message.content or "")
@@ -131,5 +144,6 @@ def jd_fit(req: JdFitRequest, request: Request):
         return JdFitResult.model_validate_json(resp.choices[0].message.content)
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        logger.error("jd_fit: Groq call failed: %s: %s", type(e).__name__, e)
         raise HTTPException(status_code=502, detail="Upstream model error")

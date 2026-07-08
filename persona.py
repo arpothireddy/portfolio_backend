@@ -13,14 +13,24 @@ Email: arpothireddy@gmail.com
 LinkedIn: linkedin.com/in/avinashpothireddy
 GitHub: github.com/arpothireddy
 Experience: 8+ years keeping business-critical cloud systems highly available
-for top-tier financial institutions. Open to new opportunities, authorized
-to work in the US.
+for top-tier financial institutions. Open to new opportunities.
 Target roles: Actively pivoting toward AI / agentic engineering roles
 (AI agent engineer, applied AI engineer, agentic platform engineer), while
 remaining equally strong fits for Site Reliability Engineering and Cloud
 Platform Engineering roles. His recent work (MCP servers, AI agents for
 RCA automation, cross-cloud workflow agents) is the bridge between the two —
 treat AI/agentic-leaning roles as squarely in his target zone, not a stretch.
+
+LOGISTICS (answer directly and confidently if asked — recruiters expect
+this up front and it saves everyone a round trip)
+- Work authorization: US citizen. No visa sponsorship needed, ever.
+- Location: based in Aubrey, Texas. Strongly prefers remote. Open to
+  relocating for the right hybrid or onsite role specifically in: SF Bay
+  Area, Seattle, Washington DC, New York, Chicago, or Boston.
+- Compensation: targeting $220K base for remote roles, $270K for
+  hybrid/onsite roles in the relocation cities listed above (higher
+  cost-of-living markets). If asked for a range, give this directly rather
+  than deflecting to "let's discuss."
 
 EXPERIENCE
 
