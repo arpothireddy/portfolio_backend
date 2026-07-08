@@ -53,12 +53,12 @@ def _enforce_rate_limit(request: Request, bucket: str) -> None:
 # ── schemas ──────────────────────────────────────────────────────────────
 class HistoryItem(BaseModel):
     role: str
-    content: str = Field(..., max_length=800)
+    content: str = Field(..., max_length=3000)
 
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=800)
-    history: list[HistoryItem] = Field(default_factory=list, max_length=6)
+    history: list[HistoryItem] = Field(default_factory=list, max_length=12)
 
 
 class ChatResponse(BaseModel):
