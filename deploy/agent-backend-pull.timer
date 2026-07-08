@@ -1,0 +1,10 @@
+[Unit]
+Description=Poll avinash-agent-backend git repo every 2 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Unit=agent-backend-pull.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,9 @@
+[Unit]
+Description=Pull latest avinash-agent-backend from git and redeploy if changed
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=avi
+ExecStart=/home/avi/avinash-agent-backend/deploy/pull-and-deploy.sh

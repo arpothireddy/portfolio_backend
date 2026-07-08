@@ -1,0 +1,16 @@
+services:
+  agent-backend:
+    build: .
+    container_name: avinash-agent-backend
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --url http://agent-backend:8000
+    depends_on:
+      - agent-backend
+    restart: unless-stopped
