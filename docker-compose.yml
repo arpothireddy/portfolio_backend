@@ -7,10 +7,3 @@ services:
     env_file:
       - .env
     restart: unless-stopped
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    command: tunnel --url http://agent-backend:8000
-    depends_on:
-      - agent-backend
-    restart: unless-stopped
