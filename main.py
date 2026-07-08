@@ -131,3 +131,4 @@ def jd_fit(req: JdFitRequest, request: Request):
         raise
     except Exception:
         raise HTTPException(status_code=502, detail="Upstream model error")
+# GitOps: deployed automatically via agent-backend-pull.timer
