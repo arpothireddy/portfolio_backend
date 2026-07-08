@@ -4,14 +4,13 @@ from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from google import genai
-from google.genai import types
+from groq import Groq
 from pydantic import BaseModel, Field
 
 from persona import SYSTEM_PROMPT, SYSTEM_PROMPT_JD
 
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-MODEL = "gemini-2.5-flash"
+client = Groq(api_key=os.environ["GROQ_API_KEY"])
+MODEL = "openai/gpt-oss-20b"
 
 app = FastAPI()
 app.add_middleware(
@@ -87,27 +86,28 @@ def health():
 def chat(req: ChatRequest, request: Request):
     _enforce_rate_limit(request, "chat")
 
-    contents = []
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     for item in req.history:
-        role = "model" if item.role == "agent" else "user"
-        contents.append(types.Content(role=role, parts=[types.Part(text=item.content)]))
-    contents.append(types.Content(role="user", parts=[types.Part(text=req.message)]))
+        role = "assistant" if item.role == "agent" else "user"
+        messages.append({"role": role, "content": item.content})
+    messages.append({"role": "user", "content": req.message})
 
     try:
-        resp = client.models.generate_content(
+        resp = client.chat.completions.create(
             model=MODEL,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                temperature=0.4,
-                max_output_tokens=700,
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
-            ),
+            messages=messages,
+            temperature=0.4,
+            max_completion_tokens=700,
+            reasoning_effort="low",
         )
     except Exception:
         raise HTTPException(status_code=502, detail="Upstream model error")
 
-    return ChatResponse(reply=resp.text or "")
+    return ChatResponse(reply=resp.choices[0].message.content or "")
+
+
+_JD_FIT_SCHEMA = JdFitResult.model_json_schema()
+_JD_FIT_SCHEMA["additionalProperties"] = False
 
 
 @app.post("/api/jd-fit", response_model=JdFitResult)
@@ -115,20 +115,21 @@ def jd_fit(req: JdFitRequest, request: Request):
     _enforce_rate_limit(request, "jd-fit")
 
     try:
-        resp = client.models.generate_content(
+        resp = client.chat.completions.create(
             model=MODEL,
-            contents=[types.Content(role="user", parts=[types.Part(text=req.jd_text)])],
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT_JD,
-                response_mime_type="application/json",
-                response_schema=JdFitResult,
-                max_output_tokens=1024,
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
-            ),
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT_JD},
+                {"role": "user", "content": req.jd_text},
+            ],
+            max_completion_tokens=1536,
+            reasoning_effort="low",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "jd_fit_result", "strict": True, "schema": _JD_FIT_SCHEMA},
+            },
         )
-        return JdFitResult.model_validate_json(resp.text)
+        return JdFitResult.model_validate_json(resp.choices[0].message.content)
     except HTTPException:
         raise
     except Exception:
         raise HTTPException(status_code=502, detail="Upstream model error")
-# GitOps: deployed automatically via agent-backend-pull.timer
