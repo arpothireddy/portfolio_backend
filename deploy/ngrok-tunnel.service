@@ -1,12 +1,12 @@
 [Unit]
-Description=Cloudflare quick tunnel for avinash-agent-backend
+Description=ngrok tunnel for avinash-agent-backend (stable free dev domain)
 After=network-online.target docker.service
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=avi
-ExecStart=/home/avi/.local/bin/cloudflared tunnel --url http://127.0.0.1:8000
+ExecStart=/home/avi/.local/bin/ngrok http 8000 --url https://tarantula-prude-cotton.ngrok-free.dev
 Restart=on-failure
 RestartSec=5
 
