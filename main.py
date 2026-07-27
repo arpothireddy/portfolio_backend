@@ -69,7 +69,7 @@ class HistoryItem(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=800)
+    message: str = Field(..., min_length=1, max_length=6000)
     history: list[HistoryItem] = Field(default_factory=list, max_length=12)
 
 
@@ -109,7 +109,7 @@ def chat(req: ChatRequest, request: Request):
             model=MODEL,
             messages=messages,
             temperature=0.4,
-            max_completion_tokens=700,
+            max_completion_tokens=1200,
             reasoning_effort="low",
         )
     except Exception as e:
