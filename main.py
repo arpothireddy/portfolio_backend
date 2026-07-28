@@ -1,5 +1,7 @@
+import json
 import logging
 import os
+import re
 import time
 from collections import defaultdict
 
@@ -134,16 +136,40 @@ def jd_fit(req: JdFitRequest, request: Request):
                 {"role": "system", "content": SYSTEM_PROMPT_JD},
                 {"role": "user", "content": req.jd_text},
             ],
-            max_completion_tokens=1536,
+            max_completion_tokens=2048,
             reasoning_effort="low",
             response_format={
                 "type": "json_schema",
                 "json_schema": {"name": "jd_fit_result", "strict": True, "schema": _JD_FIT_SCHEMA},
             },
         )
-        return JdFitResult.model_validate_json(resp.choices[0].message.content)
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error("jd_fit: Groq call failed: %s: %s", type(e).__name__, e)
         raise HTTPException(status_code=502, detail="Upstream model error")
+
+    raw = (resp.choices[0].message.content or "").strip()
+    if not raw:
+        logger.error("jd_fit: empty content from model")
+        raise HTTPException(status_code=502, detail="Empty model response")
+
+    # Primary path: strict validation.
+    try:
+        return JdFitResult.model_validate_json(raw)
+    except Exception as first_err:
+        # Salvage path: extract the outermost JSON object and coerce fields,
+        # so a stray prefix or a mildly malformed payload doesn't 502.
+        try:
+            match = re.search(r"\{.*\}", raw, re.DOTALL)
+            payload = json.loads(match.group(0)) if match else json.loads(raw)
+            return JdFitResult(
+                fit_score=int(payload.get("fit_score", 0)),
+                summary=str(payload.get("summary", "")).strip(),
+                strengths=[str(s).strip() for s in payload.get("strengths", []) if str(s).strip()],
+                gaps=[str(g).strip() for g in payload.get("gaps", []) if str(g).strip()],
+            )
+        except Exception as second_err:
+            logger.error(
+                "jd_fit: parse failed. strict=%s salvage=%s raw[:300]=%r",
+                first_err, second_err, raw[:300],
+            )
+            raise HTTPException(status_code=502, detail="Could not parse fit analysis")
