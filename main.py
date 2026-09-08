@@ -4,6 +4,7 @@ import os
 import re
 import time
 from collections import defaultdict
+from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agent-backend")
@@ -18,7 +19,13 @@ from pydantic import BaseModel, Field
 from persona import SYSTEM_PROMPT, SYSTEM_PROMPT_JD
 
 client = Groq(api_key=os.environ["GROQ_API_KEY"])
-MODEL = "openai/gpt-oss-20b"
+# Swappable via env so a newer free Groq model can be pointed at without a code
+# change. Defaults to the model currently in production if GROQ_MODEL is unset.
+MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
+
+# Shared secret gating /api/stats. Read from env; if unset, /api/stats stays
+# closed (returns 401) rather than exposing counters. Never hardcode a token.
+STATS_TOKEN = os.environ.get("STATS_TOKEN", "")
 
 app = FastAPI()
 app.add_middleware(
@@ -42,7 +49,7 @@ async def log_validation_error(request: Request, exc: RequestValidationError):
 # Fine at portfolio-site traffic scale with --workers 1. Revisit with
 # redis/slowapi only if this ever needs to survive restarts or scale out.
 _WINDOW_SECONDS = 60
-_LIMITS = {"chat": 8, "jd-fit": 3}
+_LIMITS = {"chat": 8, "jd-fit": 3, "track": 30}
 _hits: dict[str, list[float]] = defaultdict(list)
 
 
@@ -64,6 +71,28 @@ def _enforce_rate_limit(request: Request, bucket: str) -> None:
     hits.append(now)
 
 
+# ── event tracking (anonymous, free-tier only) ─────────────────────────────
+# Counters live in memory only — no DB, bucket, or file. They reset on cold
+# start (fine for a lightweight dashboard) and are consistent because the
+# server runs --workers 1. The durable record is the structured logger.info
+# "EVENT ..." line below, captured by Cloud Logging (well within its free
+# tier). We never store IPs, personal data, or full JD text — only a count,
+# and for jd_fit an optional fit_score plus a short role label.
+ALLOWED_EVENTS = {"visit", "chat", "jd_fit", "book_click"}
+_counts_all: dict[str, int] = defaultdict(int)
+_counts_today: dict[str, int] = defaultdict(int)
+_today: str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _roll_day() -> None:
+    """Reset the per-day counters when the UTC date rolls over."""
+    global _today, _counts_today
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if now != _today:
+        _today = now
+        _counts_today = defaultdict(int)
+
+
 # ── schemas ──────────────────────────────────────────────────────────────
 class HistoryItem(BaseModel):
     role: str
@@ -77,6 +106,11 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+
+
+class TrackRequest(BaseModel):
+    event: str = Field(..., max_length=40)
+    meta: dict | None = None
 
 
 class JdFitRequest(BaseModel):
@@ -94,6 +128,50 @@ class JdFitResult(BaseModel):
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/api/track")
+def track(req: TrackRequest, request: Request):
+    _enforce_rate_limit(request, "track")
+
+    if req.event not in ALLOWED_EVENTS:
+        raise HTTPException(status_code=400, detail="Unknown event")
+
+    _roll_day()
+    _counts_all[req.event] += 1
+    _counts_today[req.event] += 1
+
+    # Only jd_fit carries optional, non-identifying detail: a numeric score and
+    # a short role label. Anything else in meta is ignored — never logged.
+    extra = ""
+    if req.event == "jd_fit" and isinstance(req.meta, dict):
+        parts = []
+        score = req.meta.get("fit_score")
+        if isinstance(score, (int, float)) and not isinstance(score, bool):
+            parts.append("fit_score=%d" % max(0, min(100, int(score))))
+        role = req.meta.get("role")
+        if isinstance(role, str) and role.strip():
+            parts.append("role=%r" % role.strip()[:60])
+        if parts:
+            extra = " " + " ".join(parts)
+
+    # Durable, anonymous record via Cloud Logging (no IP, no personal data).
+    logger.info("EVENT event=%s%s", req.event, extra)
+    return {"ok": True}
+
+
+@app.get("/api/stats")
+def stats(request: Request):
+    token = request.headers.get("X-Stats-Token", "")
+    if not STATS_TOKEN or token != STATS_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    _roll_day()
+    return {
+        "date": _today,
+        "today": {e: _counts_today.get(e, 0) for e in sorted(ALLOWED_EVENTS)},
+        "all_time": {e: _counts_all.get(e, 0) for e in sorted(ALLOWED_EVENTS)},
+    }
 
 
 @app.post("/api/chat", response_model=ChatResponse)

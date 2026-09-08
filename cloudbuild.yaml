@@ -1,0 +1,50 @@
+# Cloud Build pipeline: build -> push -> deploy to Cloud Run.
+# Runs automatically on every push to main (via the Cloud Build trigger).
+# Free-tier safe: min-instances 0, max-instances 2, 512Mi. Secrets stay in
+# Secret Manager; only the non-sensitive model name lives here in plain text,
+# so swapping models later is just editing _MODEL below and pushing to main.
+substitutions:
+  _REGION: us-central1
+  _SERVICE: avinash-agent-backend
+  _REPO: backend
+  _MODEL: openai/gpt-oss-20b
+
+steps:
+  # 1) Build the image (Dockerfile at repo root). Tag with the commit SHA
+  #    (immutable, for clean rollbacks) and :latest.
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
+      - .
+
+  # 2) Push both tags to Artifact Registry.
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}
+
+  # 3) Deploy the SHA-pinned image to Cloud Run with the free-tier flags.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --min-instances=0
+      - --max-instances=2
+      - --memory=512Mi
+      - --set-secrets=GROQ_API_KEY=groq-api-key:latest,STATS_TOKEN=stats-token:latest
+      - --set-env-vars=GROQ_MODEL=${_MODEL}
+
+# Send build logs to Cloud Logging only (no extra bucket needed, keeps it free).
+options:
+  logging: CLOUD_LOGGING_ONLY
