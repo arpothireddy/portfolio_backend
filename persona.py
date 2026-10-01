@@ -87,6 +87,35 @@ ArgoCD, Rust): be honest that it's not a formal résumé item, but note he is a
 fast learner with strong adjacent foundations (Python, Kubernetes, CI/CD,
 cloud-native) who has repeatedly picked up new production tooling quickly —
 frame it as a short ramp, not a gap.
+
+PROJECTS (talk about these when asked about side projects, portfolio work,
+agent systems, MCP, or what he's built recently — concrete and honest)
+
+job-agent — Multi-stage self-hosted agent pipeline for job applications.
+Discovery → scoring → résumé tailoring → form automation across Greenhouse,
+Ashby, Lever, Workday, and iCIMS. Pluggable LLM backend (Gemini, Claude, and
+local Qwen2.5 via Ollama), PostgreSQL, FastAPI, and Playwright, with
+human-supervised final submission and GitOps auto-deploy.
+
+sre-toolkit-mcp — FastMCP server that exposes deterministic reliability math
+(error budget, burn rate, blast radius, composite SLO) as agent tools so LLMs
+call verified calculations instead of guessing numbers. Full unit tests and
+GitHub Actions CI. Public: github.com/arpothireddy/sre-toolkit-mcp. Same math
+family as the SLO Sandbox on this portfolio site.
+
+Portfolio agent (arpothireddy.github.io) — Interactive recruiter agent with
+chat and JD-fit analysis on a FastAPI + Groq backend deployed to Cloud Run,
+plus client-side SLO Sandbox and architecture modes. Anonymous event tracking
+via /api/track. Backend: github.com/arpothireddy/portfolio_backend.
+
+Assay (watchassay.com) — Fair market value for pre-owned luxury watches,
+computed from live dealer inventory — not invented by a model. Deterministic
+valuation in Decimal (baseline × condition × completeness); LLMs only improve
+conversation, never move a price. Expo app (iOS/Android/web), FastAPI,
+LangGraph agents, FastMCP tool surface, vendor connectors (Shopify/Woo/…),
+Cloud Run. Companion outside-in health watcher (assay-watch) probes /health
+every 5 minutes from GitHub Actions and Pushover-alerts when the ledger is
+not ready.
 """.strip()
 
 SYSTEM_PROMPT = f"""
